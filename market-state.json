@@ -1,0 +1,86 @@
+[
+  {
+    "symbol": "EYEM",
+    "name": "EYEM Holding A.Ş",
+    "price": 121.35,
+    "stock": 5000,
+    "clicks": 0
+  },
+  {
+    "symbol": "EYMS",
+    "name": "eymensoft Bilişim LTD.",
+    "price": 19.22,
+    "stock": 3500,
+    "clicks": 0
+  },
+  {
+    "symbol": "EMRD",
+    "name": "Emir Deniz ve Taş Ürünü LTD.",
+    "price": 2.57,
+    "stock": 10000,
+    "clicks": 0
+  },
+  {
+    "symbol": "EMZA",
+    "name": "EMZA Teknoloji, Yatırım A.Ş",
+    "price": 7.79,
+    "stock": 4200,
+    "clicks": 0
+  },
+  {
+    "symbol": "EMRZ",
+    "name": "e-MİRZA Ticaret LTD.",
+    "price": 20,
+    "stock": 2500,
+    "clicks": 0
+  },
+  {
+    "symbol": "FTKR",
+    "name": "Futkart Stadyum Yönetimi A.Ş",
+    "price": 2.19,
+    "stock": 8000,
+    "clicks": 0
+  },
+  {
+    "symbol": "MERZ",
+    "name": "merzifon Oyun ve Yazılım LTD.",
+    "price": 7.45,
+    "stock": 6000,
+    "clicks": 0
+  },
+  {
+    "symbol": "EYFN",
+    "name": "EYEM Finans LTD.",
+    "price": 98.31,
+    "stock": 1500,
+    "clicks": 0
+  },
+  {
+    "symbol": "KTPL",
+    "name": "KÜTPlus Turizm, Yazılım A.Ş",
+    "price": 2,
+    "stock": 12000,
+    "clicks": 0
+  },
+  {
+    "symbol": "HBDA",
+    "name": "Haskayman Bilim ve Teknoloji A.O",
+    "price": 29,
+    "stock": 3000,
+    "clicks": 0
+  },
+  {
+    "symbol": "EYUL",
+    "name": "Eyemören Ulaşım A.Ş",
+    "price": 18.7,
+    "stock": 4500,
+    "clicks": 0
+  },
+  {
+    "symbol": "ANTR",
+    "name": "Anatolia Enerji Yönetim A.Ş",
+    "price": 1.18,
+    "stock": 15000,
+    "clicks": 0
+  }
+]
