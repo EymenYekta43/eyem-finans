@@ -6,7 +6,7 @@ const { Pool } = require('pg');
 
 const PORT = process.env.PORT || 10000;
 const HOST = '0.0.0.0';
-const HTML_FILE = path.join(__dirname, 'eyem_finans_merkezi_hesapli.html');
+const HTML_FILE = path.join(__dirname, 'index.html');
 
 if (!process.env.DATABASE_URL) {
   console.error('DATABASE_URL tanımlı değil. Render PostgreSQL bağlantısını eklemelisin.');
@@ -32,8 +32,7 @@ const DEFAULT_STOCKS = [
   { symbol: 'KTPL', name: 'KÜTPlus Turizm, Yazılım A.Ş', price: 1.99, stock: 12000, clicks: 0 },
   { symbol: 'HBDA', name: 'Haskayman Bilim ve Teknoloji A.O', price: 29.01, stock: 3000, clicks: 0 },
   { symbol: 'EYUL', name: 'Eyemören Ulaşım A.Ş', price: 18.71, stock: 4500, clicks: 0 },
-  { symbol: 'ANTR', name: 'Anatolia Enerji Yönetim A.Ş', price: 1.17, stock: 15000, clicks: 0 },
-  { symbol: 'MRFK', name: 'MİRZASPOR Spor ve Futbol Kulübü Derneği', price: 1.00, stock: 500, clicks: 0 }
+  { symbol: 'ANTR', name: 'Anatolia Enerji Yönetim A.Ş', price: 1.17, stock: 15000, clicks: 0 }
 ];
 
 function send(res, status, data, headers = {}) {
@@ -196,27 +195,7 @@ async function updateUserFromClient(row, body) {
 
 async function getMarket() {
   const result = await pool.query('SELECT stocks, updated_at FROM eyem_market WHERE id = 1');
-  const row = result.rows[0];
-  let stocks = Array.isArray(row.stocks) ? row.stocks : [];
-
-  // Sonradan eklenen yeni borsaları mevcut merkezi markete de ekle.
-  let changed = false;
-  for (const defaultStock of DEFAULT_STOCKS) {
-    if (!stocks.some(stock => stock.symbol === defaultStock.symbol)) {
-      stocks.push({ ...defaultStock });
-      changed = true;
-    }
-  }
-
-  if (changed) {
-    const updated = await pool.query(
-      'UPDATE eyem_market SET stocks = $1::jsonb, updated_at = NOW() WHERE id = 1 RETURNING stocks, updated_at',
-      [JSON.stringify(stocks)]
-    );
-    return updated.rows[0];
-  }
-
-  return row;
+  return result.rows[0];
 }
 
 async function updateMarket() {
