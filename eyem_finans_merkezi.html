@@ -840,6 +840,13 @@ const DEFAULT_STOCKS = [
         price: 1.17,
         stock: 15000,
         clicks: 0
+    },
+    {
+        symbol: "MRFK",
+        name: "MİRZASPOR Spor ve Futbol Kulübü Derneği",
+        price: 1.00,
+        stock: 500,
+        clicks: 0
     }
 ];
 
@@ -862,7 +869,14 @@ let currencies = {
    LOCAL STORAGE
 ========================================================= */
 
+const API_BASE = "";
+let authToken = localStorage.getItem("eyem_finans_token") || "";
+
 function loadUsers() {
+    return [];
+}
+
+function loadLegacyUsers() {
     try {
         return JSON.parse(localStorage.getItem("eyem_finans_users")) || [];
     } catch {
@@ -871,7 +885,65 @@ function loadUsers() {
 }
 
 function saveUsers(users) {
-    localStorage.setItem("eyem_finans_users", JSON.stringify(users));
+    return Promise.resolve();
+}
+
+async function apiRequest(path, options = {}) {
+    const headers = {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+    };
+
+    if (authToken) {
+        headers.Authorization = "Bearer " + authToken;
+    }
+
+    const response = await fetch(API_BASE + path, {
+        ...options,
+        headers
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        throw new Error(data.message || "Sunucu hatası.");
+    }
+
+    return data;
+}
+
+async function saveCurrentUser() {
+    if (!currentUser || !authToken) return;
+
+    try {
+        const data = await apiRequest("/api/me", {
+            method: "PUT",
+            body: JSON.stringify({
+                name: currentUser.name,
+                balance: currentUser.balance,
+                cards: currentUser.cards,
+                portfolio: currentUser.portfolio,
+                watchlist: currentUser.watchlist
+            })
+        });
+
+        if (data.user) currentUser = data.user;
+    } catch (error) {
+        console.error("Hesap kaydedilemedi:", error);
+    }
+}
+
+async function getCurrentUser() {
+    if (!authToken) return null;
+
+    try {
+        const data = await apiRequest("/api/me");
+        return data.user || null;
+    } catch {
+        localStorage.removeItem("eyem_finans_token");
+        authToken = "";
+        return null;
+    }
 }
 
 function loadStocks() {
@@ -981,7 +1053,7 @@ function clearAuthMessage() {
     document.getElementById("authMessage").textContent = "";
 }
 
-function register() {
+async function register() {
 
     const name =
         document.getElementById("registerName").value.trim();
@@ -1007,61 +1079,23 @@ function register() {
         return;
     }
 
-    const users = loadUsers();
+    try {
+        const data = await apiRequest("/api/register", {
+            method: "POST",
+            body: JSON.stringify({ name, email, password })
+        });
 
-    if (users.some(u => u.email === email)) {
-        showAuthMessage("Bu e-posta ile zaten kayıt olunmuş.");
-        return;
+        authToken = data.token;
+        localStorage.setItem("eyem_finans_token", authToken);
+        currentUser = data.user;
+
+        openApp();
+    } catch (error) {
+        showAuthMessage(error.message || "Kayıt yapılamadı.");
     }
-
-    const user = {
-        id: crypto.randomUUID
-            ? crypto.randomUUID()
-            : Date.now().toString(),
-
-        name,
-        email,
-        password,
-
-        balance: 0,
-
-        cards: [{
-            id:
-                crypto.randomUUID
-                    ? crypto.randomUUID()
-                    : Date.now().toString(),
-
-            number:
-                generateCardNumber(),
-
-            balance: 3000,
-
-            createdAt:
-                new Date().toISOString()
-        }],
-
-        portfolio: {},
-
-        watchlist: [],
-
-        createdAt: new Date().toISOString()
-    };
-
-    users.push(user);
-
-    saveUsers(users);
-
-    showAuth("login");
-
-    document.getElementById("loginEmail").value = email;
-
-    showAuthMessage(
-        "Hesabın oluşturuldu. Şimdi giriş yapabilirsin.",
-        "success"
-    );
 }
 
-function login() {
+async function login() {
 
     const email =
         document.getElementById("loginEmail").value.trim().toLowerCase();
@@ -1069,56 +1103,56 @@ function login() {
     const password =
         document.getElementById("loginPassword").value;
 
-    const users = loadUsers();
-
-    const user = users.find(
-        u => u.email === email &&
-             u.password === password
-    );
-
-    if (!user) {
-        showAuthMessage(
-            "E-posta veya şifre hatalı."
-        );
+    if (!email || !password) {
+        showAuthMessage("E-posta ve şifreyi gir.");
         return;
     }
 
-    currentUser = user;
+    try {
+        const data = await apiRequest("/api/login", {
+            method: "POST",
+            body: JSON.stringify({ email, password })
+        });
 
-    if (!Array.isArray(currentUser.cards) || currentUser.cards.length === 0) {
-        currentUser.cards = [{
-            id:
-                crypto.randomUUID
-                    ? crypto.randomUUID()
-                    : Date.now().toString(),
+        authToken = data.token;
+        localStorage.setItem("eyem_finans_token", authToken);
+        currentUser = data.user;
 
-            number:
-                generateCardNumber(),
+        openApp();
+    } catch (error) {
+        /* Eski localStorage hesabını ilk girişte merkeze taşı. */
+        try {
+            const legacyUsers = loadLegacyUsers();
+            const legacyUser = legacyUsers.find(
+                u => u.email === email && u.password === password
+            );
 
-            balance: 3000,
+            if (legacyUser) {
+                const migrated = await apiRequest("/api/migrate", {
+                    method: "POST",
+                    body: JSON.stringify({ user: legacyUser })
+                });
 
-            createdAt:
-                new Date().toISOString()
-        }];
+                authToken = migrated.token;
+                localStorage.setItem("eyem_finans_token", authToken);
+                currentUser = migrated.user;
+                openApp();
+                return;
+            }
+        } catch (migrationError) {
+            console.error("Eski hesap taşınamadı:", migrationError);
+        }
 
-        saveCurrentUser();
+        showAuthMessage(error.message || "E-posta veya şifre hatalı.");
     }
-
-    localStorage.setItem(
-        "eyem_finans_session",
-        user.email
-    );
-
-    openApp();
 }
 
 function logout() {
 
     saveCurrentUser();
 
-    localStorage.removeItem(
-        "eyem_finans_session"
-    );
+    localStorage.removeItem("eyem_finans_token");
+    authToken = "";
 
     currentUser = null;
 
@@ -1154,7 +1188,12 @@ function openApp() {
 
     startMarketSimulation();
 
-    startCurrencyUpdates();
+    fetchCurrencies();
+
+    currencyTimer = setInterval(
+        fetchCurrencies,
+        60000
+    );
 }
 
 function updateUserInterface() {
@@ -1232,13 +1271,23 @@ function navigate(page) {
 
 function isMarketOpen() {
 
-    /*
-     * Alım-satım piyasası 7/24 açıktır.
-     * Diğer sistemlere dokunmadan yalnızca
-     * piyasa saat kontrolünü kaldırıyoruz.
-     */
+    const now = new Date();
 
-    return true;
+    const day = now.getDay();
+
+    const hour = now.getHours();
+
+    const minute = now.getMinutes();
+
+    const decimalHour =
+        hour + minute / 60;
+
+    const weekday =
+        day >= 1 && day <= 5;
+
+    return weekday &&
+           decimalHour >= MARKET_START &&
+           decimalHour < MARKET_END;
 }
 
 function updateMarketStatus() {
@@ -1319,62 +1368,44 @@ updateClock();
    STOCK SIMULATION
 ========================================================= */
 
-async function syncCentralMarket() {
-
-    try {
-
-        const response = await fetch("/api/market", {
-            cache: "no-store"
-        });
-
-        if (!response.ok) {
-            throw new Error("Merkezi borsa sunucusuna ulaşılamadı.");
-        }
-
-        const data = await response.json();
-
-        if (!Array.isArray(data.stocks)) {
-            throw new Error("Merkezi borsa verisi geçersiz.");
-        }
-
-        data.stocks.forEach(remoteStock => {
-
-            const localStock =
-                stocks.find(
-                    s => s.symbol === remoteStock.symbol
-                );
-
-            if (!localStock) return;
-
-            if (Number.isFinite(Number(remoteStock.price))) {
-                localStock.price = Number(remoteStock.price);
-            }
-        });
-
-        renderAll();
-
-    } catch (error) {
-
-        console.warn(
-            "Merkezi borsa verisi alınamadı:",
-            error
-        );
-    }
-}
-
 function startMarketSimulation() {
 
     if (marketTimer) {
         clearInterval(marketTimer);
     }
 
-    syncCentralMarket();
-
     marketTimer =
-        setInterval(
-            syncCentralMarket,
-            4000
-        );
+        setInterval(() => {
+
+            if (!isMarketOpen()) {
+                return;
+            }
+
+            stocks.forEach(stock => {
+
+                const change =
+                    Math.random() < .5
+                        ? -0.01
+                        : 0.01;
+
+                const next =
+                    Number(
+                        (
+                            stock.price +
+                            change
+                        ).toFixed(2)
+                    );
+
+                if (next > 0.01) {
+                    stock.price = next;
+                }
+            });
+
+            saveStocks();
+
+            renderAll();
+
+        }, 4000);
 }
 
 
@@ -1859,168 +1890,160 @@ function renderWatchlist() {
 ========================================================= */
 async function fetchCurrencies() {
 
-    let ratesLoaded = false;
-
     try {
 
         /*
-         * 1. Öncelikli kur kaynağı: USD bazlı Frankfurter
+         * Frankfurter:
+         * EUR -> TRY, USD, GBP
          */
-        try {
-
-            const response = await fetch(
-                "https://api.frankfurter.app/latest?from=USD&to=TRY,EUR,GBP",
-                { cache: "no-store" }
-            );
-
-            if (response.ok) {
-
-                const data = await response.json();
-                const rates = data.rates || {};
-
-                if (
-                    Number.isFinite(Number(rates.TRY)) &&
-                    Number.isFinite(Number(rates.EUR)) &&
-                    Number.isFinite(Number(rates.GBP))
-                ) {
-                    currencies.USD = Number(rates.TRY);
-                    currencies.EUR = Number(rates.TRY) / Number(rates.EUR);
-                    currencies.GBP = Number(rates.TRY) / Number(rates.GBP);
-                    ratesLoaded = true;
-                }
+        const response = await fetch(
+            "https://api.frankfurter.app/latest?from=EUR&to=TRY,USD,GBP",
+            {
+                cache: "no-store"
             }
+        );
 
-        } catch (primaryError) {
-            console.warn("Ana kur servisi alınamadı:", primaryError);
+        if (!response.ok) {
+            throw new Error("Kur servisi cevap vermedi.");
+        }
+
+        const data = await response.json();
+
+        if (
+            !data.rates ||
+            !data.rates.TRY ||
+            !data.rates.USD ||
+            !data.rates.GBP
+        ) {
+            throw new Error("Kur verileri eksik.");
         }
 
         /*
-         * 2. Yedek kur kaynağı
+         * Frankfurter EUR bazlı çalışıyor.
+         *
+         * Örneğin:
+         * 1 EUR = 50 TRY
+         * 1 EUR = 1.17 USD
+         *
+         * Buradan:
+         * 1 USD = 50 / 1.17 TRY
+         * 1 GBP = 50 / GBP oranı TRY
          */
-        if (!ratesLoaded) {
 
-            try {
+        currencies.EUR =
+            Number(data.rates.TRY);
 
-                const backupResponse = await fetch(
-                    "https://open.er-api.com/v6/latest/USD",
-                    { cache: "no-store" }
-                );
+        currencies.USD =
+            currencies.EUR /
+            Number(data.rates.USD);
 
-                if (!backupResponse.ok) {
-                    throw new Error("Yedek kur servisi cevap vermedi.");
-                }
+        currencies.GBP =
+            currencies.EUR /
+            Number(data.rates.GBP);
 
-                const backupData = await backupResponse.json();
-                const rates = backupData.rates || {};
-
-                if (
-                    Number.isFinite(Number(rates.TRY)) &&
-                    Number.isFinite(Number(rates.EUR)) &&
-                    Number.isFinite(Number(rates.GBP))
-                ) {
-                    currencies.USD = Number(rates.TRY);
-                    currencies.EUR = Number(rates.TRY) / Number(rates.EUR);
-                    currencies.GBP = Number(rates.TRY) / Number(rates.GBP);
-                    ratesLoaded = true;
-                }
-            } catch (backupError) {
-                console.warn("Yedek kur servisi alınamadı:", backupError);
-            }
-        }
 
         /*
-         * ALTIN: USD/ons fiyatı -> TRY/gram
+         * ALTIN
+         *
+         * Metals.live üzerinden ons altın alınır.
+         * Daha sonra USD -> TRY ve ons -> gram dönüşümü yapılır.
          */
+
+        currencies.GOLD = null;
+
         try {
 
             const goldResponse = await fetch(
-                "https://api.gold-api.com/price/XAU",
-                { cache: "no-store" }
+                "https://api.metals.live/v1/spot",
+                {
+                    cache: "no-store"
+                }
             );
 
-            if (!goldResponse.ok) {
-                throw new Error("Altın servisi cevap vermedi.");
-            }
+            if (goldResponse.ok) {
 
-            const goldData = await goldResponse.json();
-            const ounceUSD = Number(
-                goldData.price ??
-                goldData.value ??
-                goldData.XAU
-            );
+                const goldData =
+                    await goldResponse.json();
 
-            if (
-                Number.isFinite(ounceUSD) &&
-                ounceUSD > 0 &&
-                Number.isFinite(currencies.USD) &&
-                currencies.USD > 0
-            ) {
-                currencies.GOLD =
-                    (ounceUSD * currencies.USD) / 31.1034768;
+                let ounceUSD = null;
+
+                if (Array.isArray(goldData)) {
+
+                    const goldItem =
+                        goldData.find(
+                            item =>
+                                item.gold !== undefined
+                        );
+
+                    if (goldItem) {
+
+                        ounceUSD =
+                            Number(goldItem.gold);
+                    }
+                }
+
+                if (
+                    ounceUSD &&
+                    Number.isFinite(ounceUSD) &&
+                    currencies.USD
+                ) {
+
+                    /*
+                     * 1 Troy Ounce =
+                     * 31.1034768 gram
+                     */
+
+                    currencies.GOLD =
+                        (
+                            ounceUSD *
+                            currencies.USD
+                        ) / 31.1034768;
+                }
             }
 
         } catch (goldError) {
-            console.warn("Altın verisi alınamadı:", goldError);
+
+            console.warn(
+                "Altın verisi alınamadı:",
+                goldError
+            );
+
+            currencies.GOLD = null;
         }
 
-        const hasCurrency =
-            currencies.USD !== null ||
-            currencies.EUR !== null ||
-            currencies.GBP !== null ||
-            currencies.GOLD !== null;
 
-        document.getElementById("currencyStatus").textContent =
-            ratesLoaded
-                ? "Döviz ve altın verileri başarıyla güncellendi."
-                : hasCurrency
-                    ? "Kur verileri son alınan değerlerle gösteriliyor."
-                    : "Canlı kur verilerine ulaşılamadı.";
+        document.getElementById("currencyStatus")
+            .textContent =
+            "Döviz verileri başarıyla güncellendi.";
 
     } catch (error) {
 
-        console.error("Kur verisi alınamadı:", error);
+        console.error(
+            "Kur verisi alınamadı:",
+            error
+        );
+
+        /*
+         * API erişilemezse ekran tamamen boş kalmasın.
+         * Son başarılı değerler varsa onları koruyoruz.
+         */
 
         const hasCurrency =
             currencies.USD !== null ||
             currencies.EUR !== null ||
-            currencies.GBP !== null ||
-            currencies.GOLD !== null;
+            currencies.GBP !== null;
 
-        document.getElementById("currencyStatus").textContent =
+        document.getElementById("currencyStatus")
+            .textContent =
             hasCurrency
                 ? "Kur verileri son alınan değerlerle gösteriliyor."
                 : "Canlı kur verilerine ulaşılamadı.";
+
     }
 
     renderCurrencies();
     renderTicker();
 }
-
-async function startCurrencyUpdates() {
-
-    if (currencyTimer) {
-        clearTimeout(currencyTimer);
-        currencyTimer = null;
-    }
-
-    await fetchCurrencies();
-
-    // Kur bağlantısını uygulama açık kaldığı sürece sürekli canlı tut.
-    // Önceki istek bitmeden yeni istek başlatılmaz.
-    currencyTimer = setTimeout(
-        startCurrencyUpdates,
-        30000
-    );
-}
-
-// Sekme tekrar görünür olduğunda kur bilgisini hemen yenile.
-document.addEventListener("visibilitychange", () => {
-
-    if (!document.hidden) {
-        startCurrencyUpdates();
-    }
-});
-
 
 function renderCurrencies() {
 
@@ -2231,7 +2254,10 @@ function createCard() {
 
 function maskedCard(numberValue) {
 
-    return numberValue;
+    return String(numberValue || "")
+        .replace(/\s/g, "")
+        .replace(/(\d{4})(?=\d)/g, "$1 ")
+        .trim();
 }
 
 function renderCards() {
@@ -3063,10 +3089,10 @@ function renderAll() {
 
 window.addEventListener(
     "load",
-    () => {
+    async () => {
 
         currentUser =
-            getCurrentUser();
+            await getCurrentUser();
 
         if (currentUser) {
             openApp();
