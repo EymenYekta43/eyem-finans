@@ -1,12 +1,9 @@
 {
-  "name": "eyem-finans",
+  "name": "eyem-finans-merkezi",
   "version": "1.0.0",
-  "description": "EYEM Finans merkezi sanal borsa",
+  "description": "EYEM Finans merkezi hesap ve sanal borsa sistemi",
   "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
-  }
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "pg": "^8.16.3" }
 }
